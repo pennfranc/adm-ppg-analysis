@@ -8,3 +8,5 @@ dependencies:
   - sympy==1.4
   - jupyter
   - jupyterlab
+  - scipy
+- pyaudio
