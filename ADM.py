@@ -1,4 +1,4 @@
-import numpy as numpy
+import numpy as np
 
 def ADM(signal, up_threshold, down_threshold, sampling_rate, refractory_period):
     """ Asynchronous Delta Modulation Function based on Master Thesis by Nik Dennler
@@ -18,9 +18,27 @@ def ADM(signal, up_threshold, down_threshold, sampling_rate, refractory_period):
 
     Returns
     -------
-    np.ndarray
-        Boolean value indicating whether the seasonality is significant given the parameters passed.
+    Tuple[np.ndarray, np.ndarray]
+        Two arrays containing the spike trains of up and down spikes respectively.
     """
     sampling_period = 1 / sampling_rate
     T = len(signal) * sampling_period
-    times = 
+    times = np.arange(0, T, sampling_period)
+    bias_value = signal[0]
+    freeze = 0
+    up_spikes = []
+    down_spikes = []
+
+    for idx, time, in enumerate(times):
+        if freeze > 0:
+            freeze -= sampling_period
+        elif signal[idx] > bias_value + up_threshold:
+            up_spikes.append(time)
+            bias_value = signal[idx]
+            freeze = refractory_period
+        elif signal[idx] < bias_value - down_threshold:
+            down_spikes.append(time)
+            bias_value = signal[idx]
+            freeze = refractory_period
+
+    return np.array(up_spikes), np.array(down_spikes)
