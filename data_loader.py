@@ -7,8 +7,9 @@ def load_pickle(index):
     return data
 
 def unpack_data(data):
-    ppg_signal = data['signal']['wrist']['BVP']
-    acc_signal = data['signal']['wrist']['ACC']
-    heart_rate = data['label']
+    ppg_signal = data['signal']['wrist']['BVP'][:, 0]
+    acc_signal = data['signal']['wrist']['ACC'][:, 0]
+    heart_rate = data['label'] / 60
+    activity = data['activity'].reshape(-1)
 
-    return ppg_signal, acc_signal, heart_rate
+    return ppg_signal, acc_signal, heart_rate, activity
