@@ -11,5 +11,6 @@ def unpack_data(data):
     acc_signal = data['signal']['wrist']['ACC'][:, 0]
     heart_rate = data['label'] / 60
     activity = data['activity'].reshape(-1)
+    rpeaks = data['rpeaks']
 
-    return ppg_signal, acc_signal, heart_rate, activity
+    return ppg_signal, acc_signal, heart_rate, activity, rpeaks
