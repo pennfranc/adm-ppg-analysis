@@ -1,6 +1,7 @@
 name: short_project_1
 dependencies:
 - python=3.8
+- pip
 - pip:
   - numpy
   - matplotlib
@@ -9,4 +10,7 @@ dependencies:
   - jupyter
   - jupyterlab
   - scipy
+  - seaborn
+  - scikit-learn
+  - pandas
 - pyaudio
