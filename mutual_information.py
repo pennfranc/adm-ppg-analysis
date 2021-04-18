@@ -20,7 +20,7 @@ def compute_mutual_information(Sxx, hr, num_hr_bins, num_power_bins):
         
         # compute power distribution at given frequency
         power_dist, power_bin_edges = np.histogram(powers, bins=num_power_bins)
-        if sum(power_dist) == 0: continue
+        if len(power_dist) == 1: continue
         power_dist = power_dist / sum(power_dist)
 
         # iterate over heart rate bins
@@ -54,6 +54,31 @@ def reconstruct_from_spikes(spikes, length, spike_value):
     reconstructed_signal = gaussian_filter1d(reconstructed_signal, 10)
     return reconstructed_signal
 
+def to_spikes_and_back(
+    input_signal,
+    fs,
+    ADM_step_factor # step threshold (up and down) as multiple of mean amplitude
+):
+    ### run ppg through ADM
+    ADM_step = ADM_step_factor * np.mean(abs(input_signal))
+    up_spikes, down_spikes = ADM(
+        input_signal,
+        up_threshold=ADM_step,
+        down_threshold=ADM_step,
+        sampling_rate=fs,
+        refractory_period=0
+    )
+    num_spikes = len(up_spikes) + len(down_spikes)
+
+
+    ### reconstruct original signal from ADM-generated spike train using gaussian kernel
+    reconstructed_signal = (
+        reconstruct_from_spikes(up_spikes, len(input_signal), 1) +
+        reconstruct_from_spikes(down_spikes, len(input_signal), -1)
+    )
+
+    return reconstructed_signal, num_spikes
+
 def create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_percentile=99):
 
     # create spectrogram
@@ -71,56 +96,27 @@ def create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_per
     return f, t, Sxx
     
 
-#TODO: outsource signal recreation to another function and
 def mutual_info_pipeline(
-    dataset,
+    input_signal,
+    hr,
     fs=64,
     nperseg=1000,
     noverlap=None,
     fmin=0, fmax=10,
     num_hr_bins=100,
     num_power_bins=6,
-    ADM_step_factor=1, # step threshold (up and down) as multiple of mean amplitude
+    ADM_step_factor=1, 
 ):
 
-    ### create ppg spectrogram
-    ppg, acc, hr, activity, _= unpack_data(dataset)
+    # create spectrogram
+    f, t, Sxx = create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax)
+
+    # interpolate relevant heart rate measurements
     hr_timestamps = np.arange(0, len(hr) * 2, 2)
     hr_interpolation = interpolate.interp1d(hr_timestamps, hr)
-    f_ppg, t_ppg, Sxx_ppg = create_spectrogram(ppg, fs, nperseg, noverlap, fmin, fmax)
+    hr_at_relevant_timestamps = hr_interpolation(t)
 
-    # interpolate relevant heart rate measurements
-    hr_at_ppg_timestamps = hr_interpolation(t_ppg)
+    # compute mutual information
+    mutual_information = compute_mutual_information(Sxx, hr_at_relevant_timestamps, num_hr_bins, num_power_bins)
 
-
-    ### run ppg through ADM
-    ADM_step = ADM_step_factor * np.mean(abs(ppg))
-    up_spikes, down_spikes = ADM(
-        ppg,
-        up_threshold=ADM_step,
-        down_threshold=ADM_step,
-        sampling_rate=fs,
-        refractory_period=0
-    )
-    num_spikes = len(up_spikes) + len(down_spikes)
-
-
-    ### reconstruct original signal from ADM-generated spike train using gaussian kernel
-    reconstructed_signal = (
-        reconstruct_from_spikes(up_spikes, len(ppg), 1) +
-        reconstruct_from_spikes(down_spikes, len(ppg), -1)
-    )
-
-
-    ### create rec signal spectrogram
-    f_rec, t_rec, Sxx_rec = create_spectrogram(reconstructed_signal, fs, nperseg, noverlap, fmin, fmax)
-
-    # interpolate relevant heart rate measurements
-    hr_at_rec_timestamps = hr_interpolation(t_rec)
-
-
-    ### compute mutual information
-    mutual_information_ppg = compute_mutual_information(Sxx_ppg, hr_at_ppg_timestamps, num_hr_bins, num_power_bins)
-    mutual_information_rec = compute_mutual_information(Sxx_rec, hr_at_rec_timestamps, num_hr_bins, num_power_bins)
-
-    return f_ppg, f_rec, mutual_information_ppg, mutual_information_rec, num_spikes
+    return f, mutual_information
