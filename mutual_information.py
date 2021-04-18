@@ -3,6 +3,8 @@ import numpy as np
 from scipy import signal, interpolate
 from scipy.ndimage import gaussian_filter1d
 from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_val_score
 
 from ADM import ADM
 from data_loader import load_pickle, unpack_data
@@ -54,6 +56,7 @@ def reconstruct_from_spikes(spikes, length, spike_value):
     reconstructed_signal = gaussian_filter1d(reconstructed_signal, 10)
     return reconstructed_signal
 
+
 def to_spikes_and_back(
     input_signal,
     fs,
@@ -79,6 +82,7 @@ def to_spikes_and_back(
 
     return reconstructed_signal, num_spikes
 
+
 def create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_percentile=99):
 
     # create spectrogram
@@ -94,6 +98,13 @@ def create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_per
         Sxx = np.clip(Sxx, 0, np.percentile(Sxx.flatten(), clip_percentile))
 
     return f, t, Sxx
+
+
+def interpolate_hr(hr, t):
+    hr_timestamps = np.arange(0, len(hr) * 2, 2)
+    hr_interpolation = interpolate.interp1d(hr_timestamps, hr)
+    hr_at_relevant_timestamps = hr_interpolation(t)
+    return hr_at_relevant_timestamps
     
 
 def mutual_info_pipeline(
@@ -104,19 +115,51 @@ def mutual_info_pipeline(
     noverlap=None,
     fmin=0, fmax=10,
     num_hr_bins=100,
-    num_power_bins=6,
-    ADM_step_factor=1, 
+    num_power_bins=6
 ):
 
     # create spectrogram
     f, t, Sxx = create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax)
 
     # interpolate relevant heart rate measurements
-    hr_timestamps = np.arange(0, len(hr) * 2, 2)
-    hr_interpolation = interpolate.interp1d(hr_timestamps, hr)
-    hr_at_relevant_timestamps = hr_interpolation(t)
+    hr_at_relevant_timestamps = interpolate_hr(hr, t)
 
     # compute mutual information
     mutual_information = compute_mutual_information(Sxx, hr_at_relevant_timestamps, num_hr_bins, num_power_bins)
 
     return f, mutual_information
+
+
+def compute_regression_score(X, y):
+    reg = LinearRegression().fit(X, y)
+    return reg.score(X, y)
+
+
+def compute_cv_regression_score(X, y):
+    reg = LinearRegression().fit(X, y)
+    return cross_val_score(reg, X, y, cv=5).mean()
+
+
+def regression_score_pipeline(
+    input_signal,
+    hr,
+    fs=64,
+    nperseg=1000,
+    noverlap=None,
+    fmin=0, fmax=10,
+    cross_validated=True
+):
+
+    # create spectrogram
+    f, t, Sxx = create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax)
+
+    # interpolate relevant heart rate measurements
+    hr_at_relevant_timestamps = interpolate_hr(hr, t)
+
+    # compute linear regression score
+    if cross_validated:
+        regression_score = compute_cv_regression_score(np.transpose(Sxx), hr_at_relevant_timestamps)
+    else:
+        regression_score = compute_regression_score(np.transpose(Sxx), hr_at_relevant_timestamps)
+
+    return f, regression_score
