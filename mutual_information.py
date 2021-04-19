@@ -5,6 +5,8 @@ from scipy.ndimage import gaussian_filter1d
 from sklearn.metrics import r2_score, mean_squared_error
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import ShuffleSplit
+from sklearn.feature_selection import mutual_info_regression
 
 from ADM import ADM
 from data_loader import load_pickle, unpack_data
@@ -62,7 +64,7 @@ def to_spikes_and_back(
     fs,
     ADM_step_factor # step threshold (up and down) as multiple of mean amplitude
 ):
-    ### run ppg through ADM
+    # run ppg through ADM
     ADM_step = ADM_step_factor * np.mean(abs(input_signal))
     up_spikes, down_spikes = ADM(
         input_signal,
@@ -74,7 +76,7 @@ def to_spikes_and_back(
     num_spikes = len(up_spikes) + len(down_spikes)
 
 
-    ### reconstruct original signal from ADM-generated spike train using gaussian kernel
+    # reconstruct original signal from ADM-generated spike train using gaussian kernel
     reconstructed_signal = (
         reconstruct_from_spikes(up_spikes, len(input_signal), 1) +
         reconstruct_from_spikes(down_spikes, len(input_signal), -1)
@@ -115,7 +117,8 @@ def mutual_info_pipeline(
     noverlap=None,
     fmin=0, fmax=10,
     num_hr_bins=100,
-    num_power_bins=6
+    num_power_bins=6,
+    use_sklearn=False
 ):
 
     # create spectrogram
@@ -125,7 +128,10 @@ def mutual_info_pipeline(
     hr_at_relevant_timestamps = interpolate_hr(hr, t)
 
     # compute mutual information
-    mutual_information = compute_mutual_information(Sxx, hr_at_relevant_timestamps, num_hr_bins, num_power_bins)
+    if use_sklearn:
+        mutual_information = mutual_info_regression(np.transpose(Sxx), hr_at_relevant_timestamps)
+    else:
+        mutual_information = compute_mutual_information(Sxx, hr_at_relevant_timestamps, num_hr_bins, num_power_bins)
 
     return f, mutual_information
 
@@ -137,12 +143,14 @@ def compute_regression_score(X, y):
 
 def compute_cv_regression_score(X, y):
     reg = LinearRegression().fit(X, y)
-    return cross_val_score(reg, X, y, cv=5).mean()
+    cv = ShuffleSplit(n_splits=5, test_size=0.3, random_state=0)
+    return cross_val_score(reg, X, y, cv=cv).mean()
 
 
-def regression_score_pipeline(
+def score_pipeline(
     input_signal,
     hr,
+    scoring_function,
     fs=64,
     nperseg=1000,
     noverlap=None,
@@ -157,9 +165,6 @@ def regression_score_pipeline(
     hr_at_relevant_timestamps = interpolate_hr(hr, t)
 
     # compute linear regression score
-    if cross_validated:
-        regression_score = compute_cv_regression_score(np.transpose(Sxx), hr_at_relevant_timestamps)
-    else:
-        regression_score = compute_regression_score(np.transpose(Sxx), hr_at_relevant_timestamps)
+    regression_score = scoring_function(np.transpose(Sxx), hr_at_relevant_timestamps)
 
     return f, regression_score
