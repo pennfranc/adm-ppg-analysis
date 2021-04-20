@@ -7,6 +7,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import ShuffleSplit
 from sklearn.feature_selection import mutual_info_regression
+import matplotlib.pyplot as plt
 
 from ADM import ADM
 from data_loader import load_pickle, unpack_data
@@ -58,6 +59,17 @@ def reconstruct_from_spikes(spikes, length, spike_value):
     reconstructed_signal = gaussian_filter1d(reconstructed_signal, 10)
     return reconstructed_signal
 
+def first_order_low_pass(
+    data,
+    cutoff_freq,
+    order=1,
+    fs=64
+):
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff_freq / nyq
+    b, a = signal.butter(order, normal_cutoff, btype='low', analog=False)
+    y = signal.lfilter(b, a, data)
+    return y
 
 def to_spikes_and_back(
     input_signal,
@@ -107,33 +119,6 @@ def interpolate_hr(hr, t):
     hr_interpolation = interpolate.interp1d(hr_timestamps, hr)
     hr_at_relevant_timestamps = hr_interpolation(t)
     return hr_at_relevant_timestamps
-    
-
-def mutual_info_pipeline(
-    input_signal,
-    hr,
-    fs=64,
-    nperseg=1000,
-    noverlap=None,
-    fmin=0, fmax=10,
-    num_hr_bins=100,
-    num_power_bins=6,
-    use_sklearn=False
-):
-
-    # create spectrogram
-    f, t, Sxx = create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax)
-
-    # interpolate relevant heart rate measurements
-    hr_at_relevant_timestamps = interpolate_hr(hr, t)
-
-    # compute mutual information
-    if use_sklearn:
-        mutual_information = mutual_info_regression(np.transpose(Sxx), hr_at_relevant_timestamps)
-    else:
-        mutual_information = compute_mutual_information(Sxx, hr_at_relevant_timestamps, num_hr_bins, num_power_bins)
-
-    return f, mutual_information
 
 
 def compute_regression_score(X, y):
@@ -150,12 +135,14 @@ def compute_cv_regression_score(X, y):
 def score_pipeline(
     input_signal,
     hr,
-    scoring_function,
     fs=64,
     nperseg=1000,
     noverlap=None,
     fmin=0, fmax=10,
-    cross_validated=True
+    num_hr_bins=100,
+    num_power_bins=6,
+    evaluation_method='mutual_info',
+    n_neighbors=10
 ):
 
     # create spectrogram
@@ -165,6 +152,67 @@ def score_pipeline(
     hr_at_relevant_timestamps = interpolate_hr(hr, t)
 
     # compute linear regression score
-    regression_score = scoring_function(np.transpose(Sxx), hr_at_relevant_timestamps)
+    if evaluation_method == 'mutual_info_sklearn':
+        mutual_info = mutual_info_regression(np.transpose(Sxx), hr_at_relevant_timestamps, n_neighbors=n_neighbors)
+        score = mutual_info.mean()
+    elif evaluation_method == 'mutual_info':
+        mutual_info = compute_mutual_information(Sxx, hr_at_relevant_timestamps, num_hr_bins, num_power_bins)
+        score = mutual_info.mean()
+    elif evaluation_method == 'regression_insample':
+        score = compute_regression_score(np.transpose(Sxx), hr_at_relevant_timestamps)
+        mutual_info = None
+    elif evaluation_method == 'regression_cv':
+        score = compute_cv_regression_score(np.transpose(Sxx), hr_at_relevant_timestamps)
+        mutual_info = None
 
-    return f, regression_score
+    return score, f, mutual_info
+
+
+def scoring_loop(
+    ppg,
+    hr,
+    step_factor_list=[],
+    fmin=0,
+    fmax=4,
+    fs_ppg=64,
+    nperseg=1000,
+    evaluation_method='mutual_info',
+    num_power_bins=6,
+    num_hr_bins=10,
+    n_neighbors=10,
+    plot_detailed=False
+):
+
+    score_ppg, f_ppg, mutual_info_ppg = score_pipeline(ppg, hr, nperseg=nperseg, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+    
+    score_rec_list = []
+    rates_list = []
+
+    for step_factor in step_factor_list:
+        rec_signal, num_spikes = to_spikes_and_back(ppg, fs_ppg, step_factor)
+        
+        score_rec, f_rec, mutual_info_rec = score_pipeline(rec_signal, hr, nperseg=nperseg, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+
+        rate = round(num_spikes / len(ppg) * 64, 2)
+        rates_list.append(num_spikes)
+        score_rec_list.append(score_rec)
+
+        if plot_detailed:
+            plt.plot(f_ppg, mutual_info_ppg, linewidth=3, label='PPG')
+            plt.plot(f_rec, mutual_info_rec, linewidth=1.5, label='Reconstructed signal')
+            plt.title('Mutual information (reconstructed signal with average rate of {} Hz)'.format(rate))
+            plt.ylabel('Mutual information')
+            plt.xlabel('Frequency')
+            plt.legend()
+            plt.show()
+            
+    return score_ppg, score_rec_list, rates_list
+
+
+def plot_scores(score_ppg, score_rec_list, rates_list, score_name, subject):
+    plt.semilogx(rates_list, score_rec_list, label='rec signal')
+    plt.axhline(score_ppg, label='original signal', color='orange')
+    plt.legend()
+    plt.ylabel(score_name)
+    plt.xlabel('Spike rate [Hz]')
+    plt.title('Subject {}'.format(subject))
