@@ -115,7 +115,7 @@ def create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_per
 
 
 def interpolate_hr(hr, t):
-    hr_timestamps = np.arange(0, len(hr) * 2, 2)
+    hr_timestamps = np.arange(4, len(hr) * 2 + 4, 2)
     hr_interpolation = interpolate.interp1d(hr_timestamps, hr)
     hr_at_relevant_timestamps = hr_interpolation(t)
     return hr_at_relevant_timestamps
@@ -136,10 +136,10 @@ def score_pipeline(
     input_signal,
     hr,
     fs=64,
-    nperseg=1000,
+    nperseg=512,
     noverlap=None,
     fmin=0, fmax=10,
-    num_hr_bins=100,
+    num_hr_bins=10,
     num_power_bins=6,
     evaluation_method='mutual_info',
     n_neighbors=10
@@ -172,10 +172,10 @@ def scoring_loop(
     ppg,
     hr,
     step_factor_list=[],
-    fmin=0,
+    fmin=0.5,
     fmax=4,
     fs_ppg=64,
-    nperseg=1000,
+    nperseg=512,
     evaluation_method='mutual_info',
     num_power_bins=6,
     num_hr_bins=10,
@@ -194,7 +194,7 @@ def scoring_loop(
         score_rec, f_rec, mutual_info_rec = score_pipeline(rec_signal, hr, nperseg=nperseg, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
 
         rate = round(num_spikes / len(ppg) * 64, 2)
-        rates_list.append(num_spikes)
+        rates_list.append(rate)
         score_rec_list.append(score_rec)
 
         if plot_detailed:
@@ -209,10 +209,10 @@ def scoring_loop(
     return score_ppg, score_rec_list, rates_list
 
 
-def plot_scores(score_ppg, score_rec_list, rates_list, score_name, subject):
+def plot_scores(score_ppg, score_rec_list, rates_list, score_name, subject, title):
     plt.semilogx(rates_list, score_rec_list, label='rec signal')
     plt.axhline(score_ppg, label='original signal', color='orange')
     plt.legend()
     plt.ylabel(score_name)
     plt.xlabel('Spike rate [Hz]')
-    plt.title('Subject {}'.format(subject))
+    plt.title(title + ' - Subject {}'.format(subject))
