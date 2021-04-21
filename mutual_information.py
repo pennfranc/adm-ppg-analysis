@@ -146,7 +146,7 @@ def score_pipeline(
 ):
 
     # create spectrogram
-    f, t, Sxx = create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax)
+    f, t, Sxx = create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_percentile=None)
 
     # interpolate relevant heart rate measurements
     hr_at_relevant_timestamps = interpolate_hr(hr, t)
@@ -207,6 +207,44 @@ def scoring_loop(
             plt.show()
             
     return score_ppg, score_rec_list, rates_list
+
+def scoring_loop_low_pass(
+    ppg,
+    hr,
+    cutoff_freq_list=[],
+    fmin=0.5,
+    fmax=4,
+    fs_ppg=64,
+    nperseg=512,
+    evaluation_method='mutual_info',
+    num_power_bins=6,
+    num_hr_bins=10,
+    n_neighbors=10,
+    plot_detailed=False
+):
+
+    score_ppg, f_ppg, mutual_info_ppg = score_pipeline(ppg, hr, nperseg=nperseg, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+    
+    score_rec_list = []
+    rates_list = []
+
+    for cutoff_freq in cutoff_freq_list:
+        rec_signal = first_order_low_pass(ppg, cutoff_freq)
+        
+        score_rec, f_rec, mutual_info_rec = score_pipeline(rec_signal, hr, nperseg=nperseg, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+
+        score_rec_list.append(score_rec)
+
+        if plot_detailed:
+            plt.plot(f_ppg, mutual_info_ppg, linewidth=3, label='PPG')
+            plt.plot(f_rec, mutual_info_rec, linewidth=1.5, label='Reconstructed signal')
+            plt.title('Mutual information (reconstructed signal with average rate of {} Hz)'.format(rate))
+            plt.ylabel('Mutual information')
+            plt.xlabel('Frequency')
+            plt.legend()
+            plt.show()
+            
+    return score_ppg, score_rec_list
 
 
 def plot_scores(score_ppg, score_rec_list, rates_list, score_name, subject, title):
