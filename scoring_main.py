@@ -14,7 +14,7 @@ from mutual_information import (
 sns.set()
 
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
-target_dir = './plots/fmin0.5fmax4/'
+target_dir = './plots/fmin0.5fmax2.5nperseg512/'
 
 for subject_idx in range(1, 4):
     
@@ -34,11 +34,15 @@ for subject_idx in range(1, 4):
             step_factor_list=step_factor_list,
             plot_detailed=False,
             evaluation_method=evaluation_method,
-            n_neighbors=20
+            n_neighbors=20,
+            fmin=0.5,
+            fmax=2.5,
+            nperseg=512,
+            noverlap=384
         )
         ylabel = 'Mean mutual information' if evaluation_method.startswith('mutual') else 'R2 score'
         plot_scores(score_ppg, score_rec_list, rates_list, ylabel, subject_idx, evaluation_method)
         if evaluation_method == 'regression_cv':
-            plt.ylim(-0.5, 1)
+            plt.ylim(max(-0.5, min(score_rec_list)), max(score_rec_list))
         plt.savefig(target_dir + 'subject_idx=' + str(subject_idx) + '-' + evaluation_method)
         plt.close()

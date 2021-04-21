@@ -137,7 +137,7 @@ def score_pipeline(
     hr,
     fs=64,
     nperseg=512,
-    noverlap=None,
+    noverlap=384,
     fmin=0, fmax=10,
     num_hr_bins=10,
     num_power_bins=6,
@@ -176,6 +176,7 @@ def scoring_loop(
     fmax=4,
     fs_ppg=64,
     nperseg=512,
+    noverlap=384,
     evaluation_method='mutual_info',
     num_power_bins=6,
     num_hr_bins=10,
@@ -183,7 +184,7 @@ def scoring_loop(
     plot_detailed=False
 ):
 
-    score_ppg, f_ppg, mutual_info_ppg = score_pipeline(ppg, hr, nperseg=nperseg, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+    score_ppg, f_ppg, mutual_info_ppg = score_pipeline(ppg, hr, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
     
     score_rec_list = []
     rates_list = []
@@ -191,7 +192,7 @@ def scoring_loop(
     for step_factor in step_factor_list:
         rec_signal, num_spikes = to_spikes_and_back(ppg, fs_ppg, step_factor)
         
-        score_rec, f_rec, mutual_info_rec = score_pipeline(rec_signal, hr, nperseg=nperseg, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+        score_rec, f_rec, mutual_info_rec = score_pipeline(rec_signal, hr, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
 
         rate = round(num_spikes / len(ppg) * 64, 2)
         rates_list.append(rate)
@@ -216,6 +217,7 @@ def scoring_loop_low_pass(
     fmax=4,
     fs_ppg=64,
     nperseg=512,
+    noverlap=384,
     evaluation_method='mutual_info',
     num_power_bins=6,
     num_hr_bins=10,
@@ -223,7 +225,7 @@ def scoring_loop_low_pass(
     plot_detailed=False
 ):
 
-    score_ppg, f_ppg, mutual_info_ppg = score_pipeline(ppg, hr, nperseg=nperseg, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+    score_ppg, f_ppg, mutual_info_ppg = score_pipeline(ppg, hr, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
     
     score_rec_list = []
     rates_list = []
@@ -231,7 +233,7 @@ def scoring_loop_low_pass(
     for cutoff_freq in cutoff_freq_list:
         rec_signal = first_order_low_pass(ppg, cutoff_freq)
         
-        score_rec, f_rec, mutual_info_rec = score_pipeline(rec_signal, hr, nperseg=nperseg, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+        score_rec, f_rec, mutual_info_rec = score_pipeline(rec_signal, hr, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
 
         score_rec_list.append(score_rec)
 
