@@ -1,0 +1,44 @@
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from data_loader import load_pickle, unpack_data
+from mutual_information import (
+    to_spikes_and_back,
+    first_order_low_pass,
+    score_pipeline,
+    scoring_loop,
+    plot_scores
+)
+sns.set()
+
+step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
+target_dir = './plots/fmin0.5fmax4/'
+
+for subject_idx in range(1, 4):
+    
+    # track progress
+    print('processing subject ' + str(subject_idx))
+
+    # load ppg and hr data
+    dataset = load_pickle(subject_idx)
+    ppg, _, hr, activity, _= unpack_data(dataset)
+    ppg = ppg[:-(64)]
+
+
+    for evaluation_method in ['mutual_info', 'mutual_info_sklearn', 'regression_insample', 'regression_cv']:
+
+        score_ppg, score_rec_list, rates_list = scoring_loop(
+            ppg, hr,
+            step_factor_list=step_factor_list,
+            plot_detailed=False,
+            evaluation_method=evaluation_method,
+            n_neighbors=20
+        )
+        ylabel = 'Mean mutual information' if evaluation_method.startswith('mutual') else 'R2 score'
+        plot_scores(score_ppg, score_rec_list, rates_list, ylabel, subject_idx, evaluation_method)
+        if evaluation_method == 'regression_cv':
+            plt.ylim(-0.5, 1)
+        plt.savefig(target_dir + 'subject_idx=' + str(subject_idx) + '-' + evaluation_method)
+        plt.close()
