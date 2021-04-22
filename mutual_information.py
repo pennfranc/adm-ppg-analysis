@@ -97,7 +97,7 @@ def to_spikes_and_back(
     return reconstructed_signal, num_spikes
 
 
-def create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_percentile=99):
+def create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_percentile=None):
 
     # create spectrogram
     f, t, Sxx = signal.spectrogram(input_signal, fs, nperseg=nperseg, noverlap=noverlap)
@@ -131,25 +131,69 @@ def compute_cv_regression_score(X, y):
     cv = ShuffleSplit(n_splits=5, test_size=0.3, random_state=0)
     return cross_val_score(reg, X, y, cv=cv).mean()
 
-
-def score_pipeline(
-    input_signal,
-    hr,
+def create_features_and_labels(
+    input_signals,
+    hrs,
     fs=64,
     nperseg=512,
     noverlap=384,
-    fmin=0, fmax=10,
+    fmin=0, fmax=10
+):
+    # create spectrogram
+    f, t, Sxx = create_spectrogram(input_signals[0], fs, nperseg, noverlap, fmin, fmax)
+
+    # interpolate relevant heart rate measurements
+    hr_at_relevant_timestamps = interpolate_hr(hrs[0], t)
+
+    return Sxx, hr_at_relevant_timestamps, f
+
+
+def create_features_and_labels_activity_dependent(
+    input_signals,
+    hrs,
+    activities_list,
+    chosen_activity,
+    fs=64,
+    nperseg=512,
+    noverlap=384,
+    fmin=0, fmax=10
+):
+    # iterate through ppg signals and heart rates
+    Sxx_list = []
+    hr_at_rel_ts_list = []
+    for input_signal, hr, activities in zip(input_signals, hrs, activities_list):
+        
+        # create all data
+        f, t, Sxx = create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax)
+        hr_at_rel_ts = interpolate_hr(hr, t)
+
+        # for every data point, find its activity label
+        activities_at_rel_ts = activities[(t * 4).astype(int)]
+
+        # filter out all data points that do not correspond to the currently chosen activity label
+        Sxx = Sxx[:, activities_at_rel_ts == chosen_activity]
+        hr_at_rel_ts = hr_at_rel_ts[activities_at_rel_ts == chosen_activity]
+        
+        # save filtered data points
+        Sxx_list.append(Sxx.copy())
+        hr_at_rel_ts_list.append(hr_at_rel_ts)
+
+    # aggregate data points from different subjects
+    Sxx = np.concatenate(Sxx_list, axis=1)
+    hr_at_rel_ts = np.concatenate(hr_at_rel_ts_list)
+
+    return Sxx, hr_at_rel_ts, f
+        
+
+
+def score_pipeline(
+    Sxx,
+    hr_at_relevant_timestamps,
     num_hr_bins=10,
     num_power_bins=6,
     evaluation_method='mutual_info',
     n_neighbors=10
 ):
-
-    # create spectrogram
-    f, t, Sxx = create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_percentile=None)
-
-    # interpolate relevant heart rate measurements
-    hr_at_relevant_timestamps = interpolate_hr(hr, t)
 
     # compute linear regression score
     if evaluation_method == 'mutual_info_sklearn':
@@ -165,12 +209,14 @@ def score_pipeline(
         score = compute_cv_regression_score(np.transpose(Sxx), hr_at_relevant_timestamps)
         mutual_info = None
 
-    return score, f, mutual_info
+    return score, mutual_info
 
 
 def scoring_loop(
-    ppg,
-    hr,
+    ppgs,
+    hrs,
+    activities_list=None,
+    chosen_activity=1,
     step_factor_list=[],
     fmin=0.5,
     fmax=4,
@@ -184,17 +230,39 @@ def scoring_loop(
     plot_detailed=False
 ):
 
-    score_ppg, f_ppg, mutual_info_ppg = score_pipeline(ppg, hr, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+    # switch into frequency domain
+    if activities_list is None:
+        Sxx_ppg, hr_at_rel_ts_ppg, f_ppg = create_features_and_labels(ppgs, hrs, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+    else:
+        Sxx_ppg, hr_at_rel_ts_ppg, f_ppg = create_features_and_labels_activity_dependent(ppgs, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+
+    # compute score
+    score_ppg, mutual_info_ppg = score_pipeline(Sxx_ppg, hr_at_rel_ts_ppg, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
     
+    # iterate through ADM threshold parameters
     score_rec_list = []
     rates_list = []
-
     for step_factor in step_factor_list:
-        rec_signal, num_spikes = to_spikes_and_back(ppg, fs_ppg, step_factor)
-        
-        score_rec, f_rec, mutual_info_rec = score_pipeline(rec_signal, hr, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
 
-        rate = round(num_spikes / len(ppg) * 64, 2)
+        # reconstruct signals from ADM spike train
+        num_spikes = 0
+        rec_signals = []
+        for ppg in ppgs:
+            rec_signal, num_spikes_curr = to_spikes_and_back(ppg, fs_ppg, step_factor)
+            rec_signals.append(rec_signal)
+            num_spikes += num_spikes_curr
+        
+        # switch into frequency domain
+        if activities_list is None:
+            Sxx_rec, hr_at_rel_ts_rec, f_rec = create_features_and_labels(rec_signals, hrs, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+        else:
+            Sxx_rec, hr_at_rel_ts_rec, f_rec = create_features_and_labels_activity_dependent(rec_signals, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+
+        # compute score
+        score_rec, mutual_info_rec = score_pipeline(Sxx_rec, hr_at_rel_ts_rec, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+
+        # compute average spiking rate
+        rate = round(num_spikes / sum(len(ppg) for ppg in ppgs) * 64, 2)
         rates_list.append(rate)
         score_rec_list.append(score_rec)
 
@@ -249,10 +317,10 @@ def scoring_loop_low_pass(
     return score_ppg, score_rec_list
 
 
-def plot_scores(score_ppg, score_rec_list, rates_list, score_name, subject, title):
+def plot_scores(score_ppg, score_rec_list, rates_list, score_name, number, title):
     plt.semilogx(rates_list, score_rec_list, label='rec signal')
     plt.axhline(score_ppg, label='original signal', color='orange')
     plt.legend()
     plt.ylabel(score_name)
     plt.xlabel('Spike rate [Hz]')
-    plt.title(title + ' - Subject {}'.format(subject))
+    plt.title(title + ' - Number {}'.format(number))

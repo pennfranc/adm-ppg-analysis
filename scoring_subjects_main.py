@@ -6,7 +6,6 @@ import seaborn as sns
 from data_loader import load_pickle, unpack_data
 from mutual_information import (
     to_spikes_and_back,
-    first_order_low_pass,
     score_pipeline,
     scoring_loop,
     plot_scores
@@ -14,7 +13,7 @@ from mutual_information import (
 sns.set()
 
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
-target_dir = './plots/fmin0.5fmax2.5nperseg512/'
+target_dir = './plots/ADM_step_size/fmin0.5fmax2.5nperseg512/'
 
 for subject_idx in range(1, 4):
     
@@ -30,7 +29,7 @@ for subject_idx in range(1, 4):
     for evaluation_method in ['mutual_info', 'mutual_info_sklearn', 'regression_insample', 'regression_cv']:
 
         score_ppg, score_rec_list, rates_list = scoring_loop(
-            ppg, hr,
+            [ppg], [hr],
             step_factor_list=step_factor_list,
             plot_detailed=False,
             evaluation_method=evaluation_method,
@@ -43,6 +42,6 @@ for subject_idx in range(1, 4):
         ylabel = 'Mean mutual information' if evaluation_method.startswith('mutual') else 'R2 score'
         plot_scores(score_ppg, score_rec_list, rates_list, ylabel, subject_idx, evaluation_method)
         if evaluation_method == 'regression_cv':
-            plt.ylim(max(-0.5, min(score_rec_list)), max(score_rec_list))
+            plt.ylim(max(-0.5, min(score_rec_list) - 0.05), max(score_rec_list))
         plt.savefig(target_dir + 'subject_idx=' + str(subject_idx) + '-' + evaluation_method)
         plt.close()
