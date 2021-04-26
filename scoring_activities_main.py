@@ -14,7 +14,7 @@ sns.set()
 
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
 target_dir = './plots/activities/fmin0.5fmax2.5nperseg512/'
-considered_subjects  = range(1, 2)
+considered_subjects  = range(1, 16)
 
 # load data
 ppgs = []
@@ -45,7 +45,6 @@ for activity_number in range(1, 9):
             step_factor_list=step_factor_list,
             plot_detailed=False,
             evaluation_method=evaluation_method,
-            n_neighbors=20,
             fmin=0.5,
             fmax=2.5,
             nperseg=512,

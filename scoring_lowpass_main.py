@@ -29,7 +29,7 @@ for subject_idx in range(3, 4):
     for evaluation_method in ['mutual_info', 'mutual_info_sklearn', 'regression_insample', 'regression_cv']:
 
         score_ppg, score_rec_list = scoring_loop_low_pass(
-            ppg, hr,
+            [ppg], [hr],
             cutoff_freq_list=cutoff_freq_list,
             plot_detailed=False,
             evaluation_method=evaluation_method,
@@ -37,7 +37,8 @@ for subject_idx in range(3, 4):
             fmin=0.5,
             fmax=2.5,
             nperseg=512,
-            noverlap=384
+            noverlap=384,
+            order=5
         )
         ylabel = 'Mean mutual information' if evaluation_method.startswith('mutual') else 'R2 score'
         plt.plot(cutoff_freq_list, score_rec_list, label='rec signal')

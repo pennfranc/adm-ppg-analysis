@@ -278,8 +278,10 @@ def scoring_loop(
     return score_ppg, score_rec_list, rates_list
 
 def scoring_loop_low_pass(
-    ppg,
-    hr,
+    ppgs,
+    hrs,
+    activities_list=None,
+    chosen_activity=1,
     cutoff_freq_list=[],
     fmin=0.5,
     fmax=4,
@@ -290,18 +292,39 @@ def scoring_loop_low_pass(
     num_power_bins=6,
     num_hr_bins=10,
     n_neighbors=10,
-    plot_detailed=False
+    plot_detailed=False,
+    order=1
 ):
 
-    score_ppg, f_ppg, mutual_info_ppg = score_pipeline(ppg, hr, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+    # switch into frequency domain
+    if activities_list is None:
+        Sxx_ppg, hr_at_rel_ts_ppg, f_ppg = create_features_and_labels(ppgs, hrs, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+    else:
+        Sxx_ppg, hr_at_rel_ts_ppg, f_ppg = create_features_and_labels_activity_dependent(ppgs, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+
+    # compute score
+    score_ppg, mutual_info_ppg = score_pipeline(Sxx_ppg, hr_at_rel_ts_ppg, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
     
     score_rec_list = []
     rates_list = []
 
     for cutoff_freq in cutoff_freq_list:
-        rec_signal = first_order_low_pass(ppg, cutoff_freq)
+
+        # reconstruct signals from ADM spike train
+        num_spikes = 0
+        rec_signals = []
+        for ppg in ppgs:
+            rec_signal = first_order_low_pass(ppg, cutoff_freq, order=4)
+            rec_signals.append(rec_signal)
         
-        score_rec, f_rec, mutual_info_rec = score_pipeline(rec_signal, hr, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+        # switch into frequency domain
+        if activities_list is None:
+            Sxx_rec, hr_at_rel_ts_rec, f_rec = create_features_and_labels(rec_signals, hrs, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+        else:
+            Sxx_rec, hr_at_rel_ts_rec, f_rec = create_features_and_labels_activity_dependent(rec_signals, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+
+        # compute score
+        score_rec, mutual_info_rec = score_pipeline(Sxx_rec, hr_at_rel_ts_rec, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
 
         score_rec_list.append(score_rec)
 
