@@ -1,21 +1,19 @@
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-
 from data_loader import load_pickle, unpack_data
+import seaborn as sns
 from mutual_information import (
     to_spikes_and_back,
-    score_pipeline,
     scoring_loop,
     plot_scores
 )
 sns.set()
 
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
-target_dir = './plots/ADM_step_size/fmin0.5fmax2.5nperseg512/'
+target_dir = './plots/subjects/fmin0.5fmax2.5nperseg512/'
 
-for subject_idx in range(1, 4):
+for subject_idx in range(9, 10):
     
     # track progress
     print('processing subject ' + str(subject_idx))

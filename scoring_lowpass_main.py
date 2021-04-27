@@ -6,7 +6,6 @@ import seaborn as sns
 from data_loader import load_pickle, unpack_data
 from mutual_information import (
     first_order_low_pass,
-    score_pipeline,
     scoring_loop_low_pass,
     plot_scores
 )
@@ -38,7 +37,7 @@ for subject_idx in range(3, 4):
             fmax=2.5,
             nperseg=512,
             noverlap=384,
-            order=5
+            order=1
         )
         ylabel = 'Mean mutual information' if evaluation_method.startswith('mutual') else 'R2 score'
         plt.plot(cutoff_freq_list, score_rec_list, label='rec signal')

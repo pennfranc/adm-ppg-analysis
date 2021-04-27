@@ -13,7 +13,7 @@ from mutual_information import (
 sns.set()
 
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
-target_dir = './plots/activities/fmin0.5fmax2.5nperseg512/'
+target_dir = './plots/all/fmin0.5fmax2.5nperseg512/'
 considered_subjects  = range(1, 16)
 
 # load data
@@ -30,7 +30,7 @@ for subject_idx in considered_subjects:
     activities_list.append(activities)
 
 
-for activity_number in range(1, 9):
+for activity_number in [-1]: #range(1, 9):
     
     # track progress
     print('processing activity ' + str(activity_number))

@@ -97,7 +97,7 @@ def to_spikes_and_back(
     return reconstructed_signal, num_spikes
 
 
-def create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_percentile=None):
+def create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_percentile=None, normalize=True):
 
     # create spectrogram
     f, t, Sxx = signal.spectrogram(input_signal, fs, nperseg=nperseg, noverlap=noverlap)
@@ -106,6 +106,9 @@ def create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax, clip_per
     freq_slice = np.where((f >= fmin) & (f <= fmax))
     f = f[freq_slice]
     Sxx = Sxx[freq_slice,:][0]
+
+    if normalize:
+        Sxx = Sxx / Sxx.mean()
 
     # clip
     if clip_percentile is not None:
@@ -167,12 +170,14 @@ def create_features_and_labels_activity_dependent(
         f, t, Sxx = create_spectrogram(input_signal, fs, nperseg, noverlap, fmin, fmax)
         hr_at_rel_ts = interpolate_hr(hr, t)
 
-        # for every data point, find its activity label
-        activities_at_rel_ts = activities[(t * 4).astype(int)]
+        if chosen_activity > -1:
 
-        # filter out all data points that do not correspond to the currently chosen activity label
-        Sxx = Sxx[:, activities_at_rel_ts == chosen_activity]
-        hr_at_rel_ts = hr_at_rel_ts[activities_at_rel_ts == chosen_activity]
+            # for every data point, find its activity label
+            activities_at_rel_ts = activities[(t * 4).astype(int)]
+
+            # filter out all data points that do not correspond to the currently chosen activity label
+            Sxx = Sxx[:, activities_at_rel_ts == chosen_activity]
+            hr_at_rel_ts = hr_at_rel_ts[activities_at_rel_ts == chosen_activity]
         
         # save filtered data points
         Sxx_list.append(Sxx.copy())
@@ -186,7 +191,7 @@ def create_features_and_labels_activity_dependent(
         
 
 
-def score_pipeline(
+def score_from_spectrogram(
     Sxx,
     hr_at_relevant_timestamps,
     num_hr_bins=10,
@@ -212,6 +217,32 @@ def score_pipeline(
     return score, mutual_info
 
 
+def score_from_raw_signal(
+    signals,
+    hrs,
+    activities_list,
+    chosen_activity,
+    fs=64,
+    nperseg=512,
+    noverlap=384,
+    fmin=0, fmax=10,
+    num_hr_bins=10,
+    num_power_bins=6,
+    evaluation_method='mutual_info',
+    n_neighbors=10
+):
+    # switch into frequency domain
+    if activities_list is None:
+        Sxx, hr_at_rel_ts, f = create_features_and_labels(signals, hrs, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+    else:
+        Sxx, hr_at_rel_ts_ppg, f = create_features_and_labels_activity_dependent(signals, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+
+    # compute score
+    score, mutual_info = score_from_spectrogram(Sxx, hr_at_rel_ts, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+
+    return score, mutual_info, f
+
+
 def scoring_loop(
     ppgs,
     hrs,
@@ -230,14 +261,8 @@ def scoring_loop(
     plot_detailed=False
 ):
 
-    # switch into frequency domain
-    if activities_list is None:
-        Sxx_ppg, hr_at_rel_ts_ppg, f_ppg = create_features_and_labels(ppgs, hrs, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
-    else:
-        Sxx_ppg, hr_at_rel_ts_ppg, f_ppg = create_features_and_labels_activity_dependent(ppgs, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
-
     # compute score
-    score_ppg, mutual_info_ppg = score_pipeline(Sxx_ppg, hr_at_rel_ts_ppg, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+    score_ppg, mutual_info_ppg, f_ppg = score_from_raw_signal(ppgs, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
     
     # iterate through ADM threshold parameters
     score_rec_list = []
@@ -252,14 +277,8 @@ def scoring_loop(
             rec_signals.append(rec_signal)
             num_spikes += num_spikes_curr
         
-        # switch into frequency domain
-        if activities_list is None:
-            Sxx_rec, hr_at_rel_ts_rec, f_rec = create_features_and_labels(rec_signals, hrs, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
-        else:
-            Sxx_rec, hr_at_rel_ts_rec, f_rec = create_features_and_labels_activity_dependent(rec_signals, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
-
         # compute score
-        score_rec, mutual_info_rec = score_pipeline(Sxx_rec, hr_at_rel_ts_rec, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+        score_rec, mutual_info_rec, f_rec = score_from_raw_signal(rec_signals, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
 
         # compute average spiking rate
         rate = round(num_spikes / sum(len(ppg) for ppg in ppgs) * 64, 2)
@@ -293,17 +312,12 @@ def scoring_loop_low_pass(
     num_hr_bins=10,
     n_neighbors=10,
     plot_detailed=False,
-    order=1
+    order=1,
+    use_gaussian=False
 ):
 
-    # switch into frequency domain
-    if activities_list is None:
-        Sxx_ppg, hr_at_rel_ts_ppg, f_ppg = create_features_and_labels(ppgs, hrs, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
-    else:
-        Sxx_ppg, hr_at_rel_ts_ppg, f_ppg = create_features_and_labels_activity_dependent(ppgs, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
-
     # compute score
-    score_ppg, mutual_info_ppg = score_pipeline(Sxx_ppg, hr_at_rel_ts_ppg, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+    score_ppg, mutual_info_ppg, f_ppg = score_from_raw_signal(ppgs, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
     
     score_rec_list = []
     rates_list = []
@@ -314,17 +328,11 @@ def scoring_loop_low_pass(
         num_spikes = 0
         rec_signals = []
         for ppg in ppgs:
-            rec_signal = first_order_low_pass(ppg, cutoff_freq, order=4)
+            rec_signal = first_order_low_pass(ppg, cutoff_freq, order=order)
             rec_signals.append(rec_signal)
         
-        # switch into frequency domain
-        if activities_list is None:
-            Sxx_rec, hr_at_rel_ts_rec, f_rec = create_features_and_labels(rec_signals, hrs, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
-        else:
-            Sxx_rec, hr_at_rel_ts_rec, f_rec = create_features_and_labels_activity_dependent(rec_signals, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
-
         # compute score
-        score_rec, mutual_info_rec = score_pipeline(Sxx_rec, hr_at_rel_ts_rec, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
+        score_rec, mutual_info_rec, f_rec = score_from_raw_signal(rec_signals, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
 
         score_rec_list.append(score_rec)
 
@@ -347,3 +355,4 @@ def plot_scores(score_ppg, score_rec_list, rates_list, score_name, number, title
     plt.ylabel(score_name)
     plt.xlabel('Spike rate [Hz]')
     plt.title(title + ' - Number {}'.format(number))
+
