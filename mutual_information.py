@@ -235,7 +235,7 @@ def score_from_raw_signal(
     if activities_list is None:
         Sxx, hr_at_rel_ts, f = create_features_and_labels(signals, hrs, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
     else:
-        Sxx, hr_at_rel_ts_ppg, f = create_features_and_labels_activity_dependent(signals, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
+        Sxx, hr_at_rel_ts, f = create_features_and_labels_activity_dependent(signals, hrs, activities_list, chosen_activity, nperseg=nperseg, noverlap=noverlap, fmin=fmin, fmax=fmax)
 
     # compute score
     score, mutual_info = score_from_spectrogram(Sxx, hr_at_rel_ts, evaluation_method=evaluation_method, n_neighbors=n_neighbors, num_hr_bins=num_hr_bins)
@@ -296,6 +296,26 @@ def scoring_loop(
             
     return score_ppg, score_rec_list, rates_list
 
+def scoring_loop_fmins(
+    ppgs,
+    hrs,
+    fmins,
+    fmax=4,
+    fs_ppg=64,
+    nperseg=512,
+    noverlap=384,
+    evaluation_method='mutual_info',
+    num_power_bins=6,
+    num_hr_bins=10,
+    n_neighbors=10,
+):
+    scores = []
+    for fmin in fmins:
+        # compute score
+        score, _, _ = score_from_raw_signal(ppgs, hrs, None, -1, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
+        scores.append(score)
+    return scores
+
 def scoring_loop_low_pass(
     ppgs,
     hrs,
@@ -312,20 +332,17 @@ def scoring_loop_low_pass(
     num_hr_bins=10,
     n_neighbors=10,
     plot_detailed=False,
-    order=1,
-    use_gaussian=False
+    order=1
 ):
 
     # compute score
     score_ppg, mutual_info_ppg, f_ppg = score_from_raw_signal(ppgs, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
     
     score_rec_list = []
-    rates_list = []
 
     for cutoff_freq in cutoff_freq_list:
 
         # reconstruct signals from ADM spike train
-        num_spikes = 0
         rec_signals = []
         for ppg in ppgs:
             rec_signal = first_order_low_pass(ppg, cutoff_freq, order=order)
@@ -339,7 +356,6 @@ def scoring_loop_low_pass(
         if plot_detailed:
             plt.plot(f_ppg, mutual_info_ppg, linewidth=3, label='PPG')
             plt.plot(f_rec, mutual_info_rec, linewidth=1.5, label='Reconstructed signal')
-            plt.title('Mutual information (reconstructed signal with average rate of {} Hz)'.format(rate))
             plt.ylabel('Mutual information')
             plt.xlabel('Frequency')
             plt.legend()

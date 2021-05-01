@@ -6,7 +6,6 @@ import seaborn as sns
 from data_loader import load_pickle, unpack_data
 from mutual_information import (
     to_spikes_and_back,
-    score_pipeline,
     scoring_loop,
     plot_scores
 )
@@ -38,7 +37,7 @@ for activity_number in [-1]: #range(1, 9):
 
     for evaluation_method in ['mutual_info', 'mutual_info_sklearn', 'regression_insample', 'regression_cv']:
 
-        score_ppg, score_rec_list, rates_list = scoring_loop(
+        score_ppg, score_rec_list, rates_list, _ = scoring_loop(
             ppgs, hrs,
             activities_list=activities_list,
             chosen_activity=activity_number,
