@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 from data_loader import load_pickle, unpack_data
 import seaborn as sns
 from scipy import stats
@@ -12,10 +13,12 @@ from mutual_information import (
 )
 sns.set()
 
+subject_range = range(1, 16)
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
-target_dir = './plots/subjects/fmin0.5fmax2.5nperseg512/'
+target_dir = './plots/subjects/fmin0.5fmax4nperseg512/'
 compute_correlations = True
 plot_bar_charts = True
+plot_per_subject_bar_charts = False
 
 mean_hrs = []
 ppg_score_dict = {
@@ -39,8 +42,6 @@ max_score_dict = {
     'regression_cv': []
 }
 
-subject_range = range(1, 16)
-
 for subject_idx in subject_range:
     
     # track progress
@@ -63,7 +64,7 @@ for subject_idx in subject_range:
             evaluation_method=evaluation_method,
             n_neighbors=20,
             fmin=0.5,
-            fmax=2.5,
+            fmax=4,
             nperseg=512,
             noverlap=384
         )
@@ -108,12 +109,13 @@ if plot_bar_charts:
         
 
 
-        # plot relative max ADM performance
-        plt.bar(subject_range, (np.array(max_score_dict[evaluation_method]) - np.array(ppg_score_dict[evaluation_method])) / np.array(ppg_score_dict[evaluation_method]))
+        # plot absolute max ADM performance
+        plt.bar(subject_range, np.array(max_score_dict[evaluation_method]) - np.array(ppg_score_dict[evaluation_method]))
         plt.xlabel('Subject ID')
-        plt.ylabel('Relative similarity score improvement')
+        plt.ylabel('Absolute similarity score improvement')
         plt.title(evaluation_method + ' - best ADM score improvement')
-        plt.savefig(target_dir + 'relative-improvement' + '-' + evaluation_method)
+        plt.gca().xaxis.set_major_locator(mticker.FixedLocator(subject_range))
+        plt.savefig(target_dir + 'absolute-improvement' + '-' + evaluation_method)
         plt.close()
 
         # plot ppg performance
@@ -121,5 +123,25 @@ if plot_bar_charts:
         plt.xlabel('Subject ID')
         plt.ylabel('PPG Score')
         plt.title(evaluation_method + ' - PPG score')
+        plt.gca().xaxis.set_major_locator(mticker.FixedLocator(subject_range))
         plt.savefig(target_dir + 'ppg-score' + '-' + evaluation_method)
+        plt.close()
+
+if plot_per_subject_bar_charts:
+    
+    for subject_idx in subject_range:
+
+        plt.bar(
+            ['Raw PPG MI', 'Best ADM MI', 'Raw PPG R2', 'Best ADM R2'],
+            [
+                ppg_score_dict['mutual_info_sklearn'][subject_idx-1],
+                max_score_dict['mutual_info_sklearn'][subject_idx-1],
+                ppg_score_dict['regression_cv'][subject_idx-1],
+                max_score_dict['regression_cv'][subject_idx-1]
+            ]
+        )
+
+        plt.title('Subject {}'.format(subject_idx))
+        plt.ylabel('Score')
+        plt.savefig(target_dir + 'per_subject_bar_charts/subject-' + str(subject_idx))
         plt.close()

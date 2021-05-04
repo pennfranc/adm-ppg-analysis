@@ -263,7 +263,7 @@ def scoring_loop(
 
     # compute score
     score_ppg, mutual_info_ppg, f_ppg = score_from_raw_signal(ppgs, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
-    
+
     # iterate through ADM threshold parameters
     score_rec_list = []
     rates_list = []
@@ -292,7 +292,8 @@ def scoring_loop(
             plt.ylabel('Mutual information')
             plt.xlabel('Frequency')
             plt.legend()
-            plt.show()
+            plt.savefig(evaluation_method+'-at-rate-{}-Hz'.format(int(rate)))
+            plt.close()
             
     return score_ppg, score_rec_list, rates_list
 
@@ -337,7 +338,6 @@ def scoring_loop_low_pass(
 
     # compute score
     score_ppg, mutual_info_ppg, f_ppg = score_from_raw_signal(ppgs, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
-    
     score_rec_list = []
 
     for cutoff_freq in cutoff_freq_list:
