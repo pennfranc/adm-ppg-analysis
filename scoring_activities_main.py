@@ -13,13 +13,20 @@ from mutual_information import (
 sns.set()
 
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
-target_dir = './plots/all/fmin0.5fmax2.5nperseg512/'
+target_dir = './plots/activities/fmin0.5fmax2.5nperseg512/'
 considered_subjects  = range(1, 16)
 plot_bar_charts = True
-plot_per_activity_bar_charts = False
+plot_per_activity_bar_charts = True
 
 mean_hrs = []
 ppg_score_dict = {
+    'mutual_info': [],
+    'mutual_info_sklearn': [],
+    'regression_insample': [],
+    'regression_cv': []
+}
+
+ppg_amp_norm_dict = {
     'mutual_info': [],
     'mutual_info_sklearn': [],
     'regression_insample': [],
@@ -56,15 +63,16 @@ for subject_idx in considered_subjects:
 activity_range = range(1, 9)
 
 
-for activity_number in [-1]: # activity_range:
+for activity_number in activity_range:
     
     # track progress
     print('processing activity ' + str(activity_number))
 
 
-    for evaluation_method in ['mutual_info', 'mutual_info_sklearn', 'regression_insample', 'regression_cv']:
+    for evaluation_method in ['mutual_info_sklearn', 'regression_cv']:
+        print(evaluation_method)
 
-        score_ppg, score_rec_list, rates_list = scoring_loop(
+        score_ppg, score_ppg_amp_normalized, score_rec_list, rates_list = scoring_loop(
             ppgs, hrs,
             activities_list=activities_list,
             chosen_activity=activity_number,
@@ -77,8 +85,12 @@ for activity_number in [-1]: # activity_range:
             noverlap=384
         )
 
-        # save ppg score
+        # save raw ppg score
         ppg_score_dict[evaluation_method].append(score_ppg)
+
+        # save ppg amp norm score
+        ppg_amp_norm_dict[evaluation_method].append(score_ppg_amp_normalized)
+
 
         # save FRT
         if sum((score_rec_list >= score_ppg).astype(int)) > 0:
@@ -92,7 +104,7 @@ for activity_number in [-1]: # activity_range:
 
 
         ylabel = 'Mean mutual information' if evaluation_method.startswith('mutual') else 'R2 score'
-        plot_scores(score_ppg, score_rec_list, rates_list, ylabel, activity_number, evaluation_method)
+        plot_scores(score_ppg, score_ppg_amp_normalized, score_rec_list, rates_list, ylabel, activity_number, evaluation_method)
         if evaluation_method == 'regression_cv':
             plt.ylim(max(-0.5, min(score_rec_list) - 0.05), max(score_rec_list))
         plt.savefig(target_dir + 'activity_number=' + str(activity_number) + '-' + evaluation_method)
@@ -105,10 +117,13 @@ if plot_bar_charts:
 
 
         # plot absolute max ADM performance
-        plt.bar(activity_range, np.array(max_score_dict[evaluation_method] - np.array(ppg_score_dict[evaluation_method])))
+        width = 0.3
+        plt.bar(np.array(activity_range) - width / 2, np.array(max_score_dict[evaluation_method]) - np.array(ppg_score_dict[evaluation_method]), label='ADM reconstruction', width=width)
+        plt.bar(np.array(activity_range) + width / 2, np.array(ppg_amp_norm_dict[evaluation_method]) - np.array(ppg_score_dict[evaluation_method]), label='PPG amp normalization', width=width)
         plt.xlabel('Activity ID')
         plt.ylabel('Absolute similarity score improvement')
-        plt.title(evaluation_method + ' - best ADM score improvement')
+        plt.title(evaluation_method + ' - ADM and amp normalization - score improvements')
+        plt.legend()
         plt.gca().xaxis.set_major_locator(mticker.FixedLocator(activity_range))
         plt.savefig(target_dir + 'absolute-improvement' + '-' + evaluation_method)
         plt.close()

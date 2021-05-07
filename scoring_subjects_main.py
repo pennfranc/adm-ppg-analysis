@@ -15,13 +15,20 @@ sns.set()
 
 subject_range = range(1, 16)
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
-target_dir = './plots/subjects/fmin0.5fmax4nperseg512/'
+target_dir = './plots/subjects/fmin0.5fmax2.5nperseg512/'
 compute_correlations = True
 plot_bar_charts = True
 plot_per_subject_bar_charts = False
 
 mean_hrs = []
 ppg_score_dict = {
+    'mutual_info': [],
+    'mutual_info_sklearn': [],
+    'regression_insample': [],
+    'regression_cv': []
+}
+
+ppg_amp_norm_dict = {
     'mutual_info': [],
     'mutual_info_sklearn': [],
     'regression_insample': [],
@@ -57,20 +64,23 @@ for subject_idx in subject_range:
 
     for evaluation_method in ['mutual_info', 'mutual_info_sklearn', 'regression_insample', 'regression_cv']:
 
-        score_ppg, score_rec_list, rates_list = scoring_loop(
+        score_ppg, score_ppg_amp_normalized, score_rec_list, rates_list = scoring_loop(
             [ppg], [hr],
             step_factor_list=step_factor_list,
             plot_detailed=False,
             evaluation_method=evaluation_method,
             n_neighbors=20,
             fmin=0.5,
-            fmax=4,
+            fmax=2.5,
             nperseg=512,
             noverlap=384
         )
 
         # save ppg score
         ppg_score_dict[evaluation_method].append(score_ppg)
+
+        # save ppg amp norm score
+        ppg_amp_norm_dict[evaluation_method].append(score_ppg_amp_normalized)
 
         # save FRT
         if sum((score_rec_list >= score_ppg).astype(int)) > 0:
@@ -83,7 +93,7 @@ for subject_idx in subject_range:
         max_score_dict[evaluation_method].append(max(score_rec_list))
 
         ylabel = 'Mean mutual information' if evaluation_method.startswith('mutual') else 'R2 score'
-        plot_scores(score_ppg, score_rec_list, rates_list, ylabel, subject_idx, evaluation_method)
+        plot_scores(score_ppg, score_ppg_amp_normalized, score_rec_list, rates_list, ylabel, subject_idx, evaluation_method)
         if evaluation_method == 'regression_cv':
             plt.ylim(max(-0.5, min(score_rec_list) - 0.05), max(score_rec_list))
         plt.savefig(target_dir + 'subject_idx=' + str(subject_idx) + '-' + evaluation_method)
@@ -110,10 +120,13 @@ if plot_bar_charts:
 
 
         # plot absolute max ADM performance
-        plt.bar(subject_range, np.array(max_score_dict[evaluation_method]) - np.array(ppg_score_dict[evaluation_method]))
+        width = 0.3
+        plt.bar(np.array(subject_range) - width / 2, np.array(max_score_dict[evaluation_method]) - np.array(ppg_score_dict[evaluation_method]), label='ADM reconstruction', width=width)
+        plt.bar(np.array(subject_range) + width / 2, np.array(ppg_amp_norm_dict[evaluation_method]) - np.array(ppg_score_dict[evaluation_method]), label='PPG amp normalization', width=width)
         plt.xlabel('Subject ID')
         plt.ylabel('Absolute similarity score improvement')
-        plt.title(evaluation_method + ' - best ADM score improvement')
+        plt.title(evaluation_method + ' - ADM and amp normalization - score improvements')
+        plt.legend()
         plt.gca().xaxis.set_major_locator(mticker.FixedLocator(subject_range))
         plt.savefig(target_dir + 'absolute-improvement' + '-' + evaluation_method)
         plt.close()

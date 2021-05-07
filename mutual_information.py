@@ -59,6 +59,14 @@ def reconstruct_from_spikes(spikes, length, spike_value):
     reconstructed_signal = gaussian_filter1d(reconstructed_signal, 10)
     return reconstructed_signal
 
+def amplitude_normalize(signal, slice_width=(4 * 64)):
+    slices = np.arange(0, len(signal), slice_width)
+    signal_copy = signal.copy()
+    for slice_start in slices:
+        considered_slice = signal[slice_start:slice_start+slice_width]
+        signal_copy[slice_start:slice_start+slice_width] = considered_slice / np.std(considered_slice)
+    return signal_copy
+
 def first_order_low_pass(
     data,
     cutoff_freq,
@@ -259,10 +267,15 @@ def scoring_loop(
     num_hr_bins=10,
     n_neighbors=10,
     plot_detailed=False
-):
+): 
+    # amplitude normalize ppgs
+    ppgs_amp_normalized = [amplitude_normalize(ppg) for ppg in ppgs]
 
-    # compute score
+    # compute raw ppg score
     score_ppg, mutual_info_ppg, f_ppg = score_from_raw_signal(ppgs, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
+
+    # compute amplitude normalized ppg score
+    score_ppg_amp_normalized, mutual_info_ppg_amp_normalized, _ = score_from_raw_signal(ppgs_amp_normalized, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
 
     # iterate through ADM threshold parameters
     score_rec_list = []
@@ -295,7 +308,7 @@ def scoring_loop(
             plt.savefig(evaluation_method+'-at-rate-{}-Hz'.format(int(rate)))
             plt.close()
             
-    return score_ppg, score_rec_list, rates_list
+    return score_ppg, score_ppg_amp_normalized, score_rec_list, rates_list
 
 def scoring_loop_fmins(
     ppgs,
@@ -364,9 +377,10 @@ def scoring_loop_low_pass(
     return score_ppg, score_rec_list
 
 
-def plot_scores(score_ppg, score_rec_list, rates_list, score_name, number, title):
+def plot_scores(score_ppg, score_ppg_amp_normalized, score_rec_list, rates_list, score_name, number, title):
     plt.semilogx(rates_list, score_rec_list, label='rec signal')
     plt.axhline(score_ppg, label='original signal', color='orange')
+    plt.axhline(score_ppg_amp_normalized, label='ppg amp normalized', color='green')
     plt.legend()
     plt.ylabel(score_name)
     plt.xlabel('Spike rate [Hz]')
