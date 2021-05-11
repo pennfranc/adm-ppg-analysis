@@ -13,10 +13,10 @@ from mutual_information import (
 sns.set()
 
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
-target_dir = './plots/activities/subject7fmin0.5fmax2.5ampnorm2/'
-considered_subjects  = [7]
+target_dir = './plots/all/fmin0.5fmax2.5ampnorm2/'
+considered_subjects  = range(1, 16)
 plot_spike_rate_dependence = True
-plot_bar_charts = True
+plot_bar_charts = False
 plot_per_activity_bar_charts = False
 
 evaluation_methods = ['mutual_info_sklearn', 'regression_cv']
@@ -66,7 +66,7 @@ for subject_idx in considered_subjects:
 activity_range = range(1, 9)
 
 
-for activity_number in activity_range:
+for activity_number in [-1]:#activity_range:
     
     # track progress
     print('processing activity ' + str(activity_number))

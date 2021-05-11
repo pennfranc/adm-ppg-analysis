@@ -15,10 +15,11 @@ sns.set()
 
 subject_range = range(1, 16)
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
-target_dir = './plots/subjects/fmin0.5fmax2.5nperseg512/'
+target_dir = './plots/subjects/fmin0.5fmax2.5ampnorm2/'
 compute_correlations = True
 plot_bar_charts = True
 plot_per_subject_bar_charts = False
+evaluation_methods = ['mutual_info_sklearn', 'regression_cv']
 
 mean_hrs = []
 ppg_score_dict = {
@@ -62,7 +63,7 @@ for subject_idx in subject_range:
     mean_hrs.append(np.mean(hr))
 
 
-    for evaluation_method in ['mutual_info', 'mutual_info_sklearn', 'regression_insample', 'regression_cv']:
+    for evaluation_method in evaluation_methods:
 
         score_ppg, score_ppg_amp_normalized, score_rec_list, rates_list = scoring_loop(
             [ppg], [hr],
@@ -70,6 +71,7 @@ for subject_idx in subject_range:
             plot_detailed=False,
             evaluation_method=evaluation_method,
             n_neighbors=20,
+            amp_norm_window_seconds=2,
             fmin=0.5,
             fmax=2.5,
             nperseg=512,
@@ -100,7 +102,7 @@ for subject_idx in subject_range:
         plt.close()
 
 if compute_correlations:
-    for evaluation_method in ['mutual_info', 'mutual_info_sklearn', 'regression_insample', 'regression_cv']:
+    for evaluation_method in evaluation_methods:
         
         plt.scatter(mean_hrs, frts_dict[evaluation_method])
         plt.xlabel('Mean heart rate [Hz]')
@@ -115,7 +117,7 @@ if compute_correlations:
 
 
 if plot_bar_charts:
-    for evaluation_method in ['mutual_info', 'mutual_info_sklearn', 'regression_insample', 'regression_cv']:
+    for evaluation_method in evaluation_methods:
         
 
 

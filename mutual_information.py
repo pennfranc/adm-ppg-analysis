@@ -257,6 +257,7 @@ def scoring_loop(
     activities_list=None,
     chosen_activity=1,
     step_factor_list=[],
+    amp_norm_window_seconds=2,
     fmin=0.5,
     fmax=4,
     fs_ppg=64,
@@ -269,7 +270,7 @@ def scoring_loop(
     plot_detailed=False
 ): 
     # amplitude normalize ppgs
-    ppgs_amp_normalized = [amplitude_normalize(ppg) for ppg in ppgs]
+    ppgs_amp_normalized = [amplitude_normalize(ppg, amp_norm_window_seconds * 64) for ppg in ppgs]
 
     # compute raw ppg score
     score_ppg, mutual_info_ppg, f_ppg = score_from_raw_signal(ppgs, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
@@ -301,6 +302,7 @@ def scoring_loop(
         if plot_detailed:
             plt.plot(f_ppg, mutual_info_ppg, linewidth=3, label='PPG')
             plt.plot(f_rec, mutual_info_rec, linewidth=1.5, label='Reconstructed signal')
+            plt.plot(f_ppg, mutual_info_ppg_amp_normalized, linewidth=1.5, label='PPG amplitude normalized')
             plt.title('Mutual information (reconstructed signal with average rate of {} Hz)'.format(rate))
             plt.ylabel('Mutual information')
             plt.xlabel('Frequency')
@@ -330,12 +332,12 @@ def scoring_loop_fmins(
         scores.append(score)
     return scores
 
-def scoring_loop_low_pass(
+def scoring_loop_gaussian(
     ppgs,
     hrs,
     activities_list=None,
     chosen_activity=1,
-    cutoff_freq_list=[],
+    var_list=[],
     fmin=0.5,
     fmax=4,
     fs_ppg=64,
@@ -353,12 +355,12 @@ def scoring_loop_low_pass(
     score_ppg, mutual_info_ppg, f_ppg = score_from_raw_signal(ppgs, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
     score_rec_list = []
 
-    for cutoff_freq in cutoff_freq_list:
+    for var in var_list:
 
         # reconstruct signals from ADM spike train
         rec_signals = []
         for ppg in ppgs:
-            rec_signal = first_order_low_pass(ppg, cutoff_freq, order=order)
+            rec_signal = gaussian_filter1d(ppg, var)
             rec_signals.append(rec_signal)
         
         # compute score
