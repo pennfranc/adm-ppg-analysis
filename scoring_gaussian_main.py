@@ -32,15 +32,10 @@ for activity_number in [-1]:
     # track progress
     print('processing activity ' + str(activity_number))
 
-    # load ppg and hr data
-    dataset = load_pickle(subject_idx)
-    ppg, _, hr, activity, _= unpack_data(dataset)
-    ppg = ppg[:-(64)]
-
     for evaluation_method in ['mutual_info_sklearn', 'regression_cv']:
 
         score_ppg, score_rec_list = scoring_loop_gaussian(
-            [ppg], [hr],
+            ppgs, hrs,
             activities_list=activities_list,
             chosen_activity=activity_number,
             var_list=var_list,
@@ -59,8 +54,8 @@ for activity_number in [-1]:
         plt.legend()
         plt.ylabel(ylabel)
         plt.xlabel('Gaussian filter sigma')
-        plt.title(evaluation_method + ' - Subject {}'.format(subject_idx))
+        plt.title(evaluation_method)
         if evaluation_method == 'regression_cv':
             plt.ylim(max(-0.5, min(score_rec_list)), None)
-        plt.savefig(target_dir + 'subject_idx=' + str(subject_idx) + '-' + evaluation_method)
+        plt.savefig(target_dir + evaluation_method)
         plt.close()

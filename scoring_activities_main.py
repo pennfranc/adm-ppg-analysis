@@ -13,8 +13,8 @@ from mutual_information import (
 sns.set()
 
 step_factor_list = np.concatenate([np.linspace(0, 1, 10), np.linspace(1, 10, 5)])
-target_dir = './plots/activities/subject7fmin0.5fmax2.5ampnorm2/'
-considered_subjects  = [7]
+target_dir = './plots/activities/fmin0.5fmax2.5ampnorm2/'
+considered_subjects  = range(1, 16)
 plot_spike_rate_dependence = True
 plot_bar_charts = True
 plot_per_activity_bar_charts = False

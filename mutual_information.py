@@ -8,6 +8,7 @@ from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import ShuffleSplit
 from sklearn.feature_selection import mutual_info_regression
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 from ADM import ADM
 from data_loader import load_pickle, unpack_data
@@ -67,7 +68,7 @@ def amplitude_normalize(signal, slice_width=(4 * 64)):
         signal_copy[slice_start:slice_start+slice_width] = considered_slice / np.std(considered_slice)
     return signal_copy
 
-def first_order_low_pass(
+def low_pass_filter(
     data,
     cutoff_freq,
     order=1,
@@ -387,4 +388,56 @@ def plot_scores(score_ppg, score_ppg_amp_normalized, score_rec_list, rates_list,
     plt.ylabel(score_name)
     plt.xlabel('Spike rate [Hz]')
     plt.title(title + ' - Number {}'.format(number))
+
+
+def scoring_loop_lowpass(
+    ppgs,
+    hrs,
+    activities_list=None,
+    chosen_activity=1,
+    cutoff_freq_list=[],
+    fmin=0.5,
+    fmax=4,
+    fs_ppg=64,
+    nperseg=512,
+    noverlap=384,
+    evaluation_method='mutual_info',
+    num_power_bins=6,
+    num_hr_bins=10,
+    n_neighbors=10,
+    plot_detailed=False,
+    order=1
+):
+
+    # compute score
+    score_ppg, mutual_info_ppg, f_ppg = score_from_raw_signal(ppgs, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
+    score_rec_list = []
+
+    for cutoff_freq in cutoff_freq_list:
+
+        # reconstruct signals from ADM spike train
+        rec_signals = []
+        for ppg in ppgs:
+            rec_signal = low_pass_filter(ppg, cutoff_freq, order=4)
+            rec_signals.append(rec_signal)
+        
+        # compute score
+        score_rec, mutual_info_rec, f_rec = score_from_raw_signal(rec_signals, hrs, activities_list, chosen_activity, fs_ppg, nperseg, noverlap, fmin, fmax, num_hr_bins, evaluation_method=evaluation_method, n_neighbors=n_neighbors)
+
+        score_rec_list.append(score_rec)
+
+        if plot_detailed and evaluation_method == 'mutual_info_sklearn':
+            norm = mpl.colors.Normalize(vmin=1.0, vmax=3.0)
+            cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.get_cmap('viridis_r'))
+            if cutoff_freq == 1.0:
+                plt.plot(f_ppg, mutual_info_ppg, linewidth=3, label='PPG', color='red')
+            plt.plot(f_rec, mutual_info_rec, linewidth=1.5, label='Low-pass filtered signal (cutoff={}Hz)'.format(round(cutoff_freq, 2)), color=cmap.to_rgba(cutoff_freq))
+            plt.ylabel('Mutual information', fontsize=14)
+            plt.xlabel('Frequency [Hz]', fontsize=14)
+            plt.legend()
+            plt.savefig('mutual_info_sklearn-cutoff_freq=' + str(cutoff_freq) +'.png')
+    
+    plt.close()
+            
+    return score_ppg, score_rec_list
 
